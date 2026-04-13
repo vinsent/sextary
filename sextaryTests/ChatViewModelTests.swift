@@ -7,7 +7,8 @@ class ChatViewModelTests: XCTestCase {
     override func setUp() {
         super.setUp()
         // 使用一个测试用的API密钥
-        viewModel = ChatViewModel(apiKey: "test_api_key")
+        viewModel = ChatViewModel()
+        viewModel.configApiKey("test_api_key")
     }
     
     override func tearDown() {
