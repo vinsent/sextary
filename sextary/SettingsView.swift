@@ -1,14 +1,9 @@
 import SwiftUI
 
 struct SettingsView: View {
-    @State private var showAPIKeyView: Bool = false
+    @StateObject private var viewModel = SettingsViewModel()
     @State private var showDeleteConfirmation: Bool = false
-    @State private var isDeleting: Bool = false
     @State private var deleteSuccess: Bool = false
-    
-    private var apiKeyExists: Bool {
-        KeychainManager.shared.getAPIKey() != nil
-    }
     
     var body: some View {
         NavigationStack {
@@ -17,16 +12,11 @@ struct SettingsView: View {
                     HStack {
                         Text("Status")
                         Spacer()
-                        if apiKeyExists {
-                            Text("Configured")
-                                .foregroundColor(.green)
-                        } else {
-                            Text("Not Configured")
-                                .foregroundColor(.red)
-                        }
+                        Text(viewModel.apiKeyStatus)
+                            .foregroundColor(viewModel.apiKeyStatus.contains("No") ? .red : .green)
                     }
                     
-                    Button(action: { showAPIKeyView = true }) {
+                    Button(action: viewModel.openAPIKeyInput) {
                         HStack {
                             Text("Enter API Key")
                             Spacer()
@@ -35,7 +25,7 @@ struct SettingsView: View {
                         }
                     }
                     
-                    if apiKeyExists {
+                    if !viewModel.apiKeyStatus.contains("No") {
                         Button(action: { showDeleteConfirmation = true }) {
                             HStack {
                                 Text("Delete API Key")
@@ -59,8 +49,11 @@ struct SettingsView: View {
             }
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
-            .sheet(isPresented: $showAPIKeyView) {
-                EnterAPIKeyView { showAPIKeyView = false }
+            .sheet(isPresented: $viewModel.showAPIKeyView) {
+                EnterAPIKeyView { 
+                    viewModel.showAPIKeyView = false
+                    viewModel.checkAPIKeyStatus()
+                }
             }
             .alert(isPresented: $showDeleteConfirmation) {
                 Alert(
@@ -83,16 +76,7 @@ struct SettingsView: View {
     }
     
     private func deleteAPIKey() {
-        isDeleting = true
-        
-        Task {
-            do {
-                try KeychainManager.shared.deleteAPIKey()
-                deleteSuccess = true
-            } catch {
-                print("Error deleting API key: \(error.localizedDescription)")
-            }
-            isDeleting = false
-        }
+        viewModel.deleteAPIKey()
+        deleteSuccess = true
     }
 }

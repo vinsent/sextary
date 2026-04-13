@@ -33,7 +33,7 @@ struct KimiChatRequest: Encodable {
 }
 
 struct KimiChatResponse: Decodable {
-    let id: String
+    let id: String?
     let object: String?
     let created: Int?
     let model: String?
@@ -130,8 +130,8 @@ class KimiAPIService {
             }
             
             // Parse successful response
-            let kimiResponse = try! JSONDecoder.shared.decode(KimiChatResponse.self, from: data)
-            print("Received response from Kimi API: \(kimiResponse.id)")
+            let kimiResponse = try JSONDecoder.shared.decode(KimiChatResponse.self, from: data)
+            print("Received response from Kimi API: \(kimiResponse.id ?? "unknown")")
             return kimiResponse
         } catch let error as KimiError {
             // Handle Kimi API errors first

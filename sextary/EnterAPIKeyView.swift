@@ -1,12 +1,11 @@
 import SwiftUI
 
 struct EnterAPIKeyView: View {
-    @State private var apiKey: String = ""
-    @State private var isSaving: Bool = false
-    @State private var errorMessage: String = ""
-    @State private var showSuccess: Bool = false
+    @StateObject private var viewModel: APIKeyViewModel
     
-    let onSave: () -> Void
+    init(onSave: @escaping () -> Void) {
+        _viewModel = StateObject(wrappedValue: APIKeyViewModel(onSave: onSave))
+    }
     
     var body: some View {
         VStack(spacing: 20) {
@@ -21,27 +20,27 @@ struct EnterAPIKeyView: View {
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 40)
             
-            TextField("API Key", text: $apiKey)
+            TextField("API Key", text: $viewModel.apiKey)
                 .padding()
                 .background(RoundedRectangle(cornerRadius: 10).stroke(Color.gray, lineWidth: 1))
                 .padding(.horizontal, 40)
                 .autocapitalization(.none)
                 .keyboardType(.default)
             
-            if !errorMessage.isEmpty {
-                Text(errorMessage)
+            if !viewModel.errorMessage.isEmpty {
+                Text(viewModel.errorMessage)
                     .foregroundColor(.red)
                     .font(.footnote)
             }
             
-            if showSuccess {
+            if viewModel.showSuccess {
                 Text("API key saved successfully!")
                     .foregroundColor(.green)
                     .font(.footnote)
             }
             
-            Button(action: saveAPIKey) {
-                if isSaving {
+            Button(action: viewModel.saveAPIKey) {
+                if viewModel.isSaving {
                     ProgressView()
                         .progressViewStyle(CircularProgressViewStyle())
                         .foregroundColor(.white)
@@ -60,33 +59,8 @@ struct EnterAPIKeyView: View {
                         .padding(.horizontal, 40)
                 }
             }
-            .disabled(isSaving || apiKey.isEmpty)
+            .disabled(viewModel.isSaving || viewModel.apiKey.isEmpty)
         }
         .padding()
-        .onAppear {
-            // 尝试加载已保存的API密钥
-            if let savedAPIKey = KeychainManager.shared.getAPIKey() {
-                apiKey = savedAPIKey
-            }
-        }
-    }
-    
-    private func saveAPIKey() {
-        isSaving = true
-        errorMessage = ""
-        showSuccess = false
-        
-        Task {
-            do {
-                try KeychainManager.shared.saveAPIKey(apiKey)
-                showSuccess = true
-                // 延迟一秒后调用回调
-                try await Task.sleep(nanoseconds: 1_000_000_000)
-                onSave()
-            } catch {
-                errorMessage = "Failed to save API key: \(error.localizedDescription)"
-            }
-            isSaving = false
-        }
     }
 }
