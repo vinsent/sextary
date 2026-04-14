@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		3A96639B2F8EAAFF0079A23F /* MarkdownUI in Frameworks */ = {isa = PBXBuildFile; productRef = 3A96639A2F8EAAFF0079A23F /* MarkdownUI */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		3A133FA42F8D54E7003A94A2 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -39,6 +43,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				3A96639B2F8EAAFF0079A23F /* MarkdownUI in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -90,6 +95,7 @@
 			);
 			name = sextary;
 			packageProductDependencies = (
+				3A96639A2F8EAAFF0079A23F /* MarkdownUI */,
 			);
 			productName = sextary;
 			productReference = 3A133F7E2F8D2887003A94A2 /* sextary.app */;
@@ -146,6 +152,9 @@
 			);
 			mainGroup = 3A133F752F8D2887003A94A2;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				3A9663992F8EAAFF0079A23F /* XCRemoteSwiftPackageReference "swift-markdown-ui" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 3A133F7F2F8D2887003A94A2 /* Products */;
 			projectDirPath = "";
@@ -458,6 +467,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		3A9663992F8EAAFF0079A23F /* XCRemoteSwiftPackageReference "swift-markdown-ui" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/gonzalezreal/swift-markdown-ui";
+			requirement = {
+				kind = exactVersion;
+				version = 2.4.1;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		3A96639A2F8EAAFF0079A23F /* MarkdownUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 3A9663992F8EAAFF0079A23F /* XCRemoteSwiftPackageReference "swift-markdown-ui" */;
+			productName = MarkdownUI;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 3A133F762F8D2887003A94A2 /* Project object */;
 }
