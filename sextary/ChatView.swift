@@ -1,8 +1,8 @@
 //
-//  ContentView.swift
+//  ChatView.swift
 //  sextary
 //
-//  Created by z z on 2026/4/13.
+//  Created by z z on 2026/4/13
 //
 
 import SwiftUI
@@ -18,14 +18,10 @@ struct ChatView: View {
     @State private var showSettingsView: Bool = false
     @StateObject private var viewModel: ChatViewModel = ChatViewModel()
     
-    private var apiKey: String? {
-        KeychainManager.shared.getAPIKey()
-    }
-    
     var body: some View {
         NavigationStack {
             VStack {
-                if apiKey != nil {
+                if viewModel.hasAPIKey {
                     // 消息列表
                     ScrollView {
                         LazyVStack(spacing: 16) {
@@ -87,20 +83,15 @@ struct ChatView: View {
         .sheet(isPresented: $showAPIKeyView) {
             EnterAPIKeyView { 
                 showAPIKeyView = false
-                // 重新初始化ChatViewModel
-                if let apiKey = apiKey {
-                    viewModel.configApiKey(apiKey)
-                }
+                viewModel.checkAPIKeyStatus()
             }
         }
         .sheet(isPresented: $showSettingsView) {
             SettingsView()
         }
         .onAppear {
-            // 检查是否有API密钥
-            if let apiKey = apiKey {
-                viewModel.configApiKey(apiKey)
-            } else {
+            viewModel.checkAPIKeyStatus()
+            if !viewModel.hasAPIKey {
                 showAPIKeyView = true
             }
         }

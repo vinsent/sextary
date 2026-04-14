@@ -6,17 +6,31 @@ final class ChatViewModel: ObservableObject {
     @Published var inputText: String = ""
     @Published var isLoading: Bool = false
     @Published var errorMessage: String = ""
+    @Published var hasAPIKey: Bool = false
     
     private var apiKey: String? = nil
     private var apiService: KimiAPIService? = nil
+    private let keychainManager: KeychainManager
     
-    init() {
+    init(apiService: KimiAPIService? = nil, keychainManager: KeychainManager = KeychainManager.shared) {
+        self.apiService = apiService
+        self.keychainManager = keychainManager
         initializeMessages()
+        checkAPIKeyStatus()
     }
     
     func configApiKey(_ key: String) {
         self.apiKey = key
         self.apiService = KimiAPIService(with: key)
+        self.hasAPIKey = true
+    }
+    
+    func checkAPIKeyStatus() {
+        self.hasAPIKey = keychainManager.getAPIKey() != nil
+        if let apiKey = keychainManager.getAPIKey() {
+            self.apiKey = apiKey
+            self.apiService = KimiAPIService(with: apiKey)
+        }
     }
     
     private func initializeMessages() {
