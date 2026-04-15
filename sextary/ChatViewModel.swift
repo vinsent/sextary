@@ -52,6 +52,11 @@ final class ChatViewModel: ObservableObject {
         isLoading = true
         errorMessage = ""
         
+        // 添加助手消息占位符
+        let assistantMessageId = UUID()
+        let placeholderMessage = ChatMessage(content: "", isUser: false)
+        messages.append(placeholderMessage)
+        
         // 发送消息到Kimi API
         Task {
             do {
@@ -59,17 +64,35 @@ final class ChatViewModel: ObservableObject {
                     Message.system("You are a helpful AI assistant that responds to user queries in a friendly and informative manner."),
                     Message.user(messageText)
                 ]
-                let response = try await apiService.send(messagesForAPI)
                 
-                if let assistantMessage = response.choices?.first?.message.content {
-                    // 添加助手消息
-                    let assistantChatMessage = ChatMessage(content: assistantMessage, isUser: false)
-                    messages.append(assistantChatMessage)
+                let stream = try await apiService.stream(messagesForAPI)
+                
+                // 处理流式响应
+                var accumulatedContent = ""
+                for try await chunk in stream {
+                    accumulatedContent += chunk
+                    
+                    // 更新助手消息
+                    await MainActor.run {
+                        if let lastIndex = messages.indices.last, !messages[lastIndex].isUser {
+                            messages[lastIndex] = ChatMessage(content: accumulatedContent, isUser: false)
+                        }
+                    }
                 }
             } catch {
-                errorMessage = "Error: \(error.localizedDescription)"
+                await MainActor.run {
+                    errorMessage = "Error: \(error.localizedDescription)"
+                    // 移除占位符消息
+                    if let lastIndex = messages.indices.last, !messages[lastIndex].isUser {
+                        messages.removeLast()
+                    }
+                }
             }
-            isLoading = false
+            
+            // 无论成功还是失败，都关闭加载状态
+            await MainActor.run {
+                isLoading = false
+            }
         }
     }
 }

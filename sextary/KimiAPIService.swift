@@ -28,8 +28,14 @@ struct KimiChatRequest: Encodable {
     let top_p: Double = 0.95
     let frequency_penalty: Double = 0
     let presence_penalty: Double = 0
-    let stream: Bool = false
+    let stream: Bool
     let n: Int = 1
+    
+    init(model: String, messages: [Message], stream: Bool = false) {
+        self.model = model
+        self.messages = messages
+        self.stream = stream
+    }
 }
 
 struct KimiChatResponse: Decodable {
@@ -57,6 +63,28 @@ struct KimiUsage: Decodable {
     let prompt_tokens: Int?
     let completion_tokens: Int?
     let total_tokens: Int?
+}
+
+// Streaming response structs
+struct KimiStreamResponse: Decodable {
+    let id: String?
+    let object: String?
+    let created: Int?
+    let model: String?
+    let system_fingerprint: String?
+    let choices: [KimiStreamChoice]?
+    let usage: KimiUsage?
+}
+
+struct KimiStreamChoice: Decodable {
+    let index: Int
+    let delta: KimiDelta
+    let finish_reason: String?
+}
+
+struct KimiDelta: Decodable {
+    let role: String?
+    let content: String?
 }
 
 struct KimiErrorResponse: Decodable {
@@ -92,7 +120,8 @@ class KimiAPIService {
         // 创建Kimi API请求
         let kimiRequest = KimiChatRequest(
             model: "kimi-k2.5",
-            messages: messages
+            messages: messages,
+            stream: false
         )
         
         let jsonData = try JSONEncoder.shared.encode(kimiRequest)
@@ -145,6 +174,86 @@ class KimiAPIService {
             // Handle other errors
             print("Other error: \(error.localizedDescription)")
             throw error
+        }
+    }
+    
+    func stream(_ messages: [Message]) async throws -> AsyncThrowingStream<String, Error> {
+        // Kimi API endpoint - 使用官方中国区域端点
+        var request = URLRequest(url: URL(string: "https://api.moonshot.cn/v1/chat/completions")!)
+        request.httpMethod = "POST"
+        // 确保API Key格式正确
+        let trimmedKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        request.addValue("Bearer \(trimmedKey)", forHTTPHeaderField: "Authorization")
+        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        // 创建Kimi API请求，启用stream
+        let kimiRequest = KimiChatRequest(
+            model: "kimi-k2.5",
+            messages: messages,
+            stream: true
+        )
+        
+        let jsonData = try JSONEncoder.shared.encode(kimiRequest)
+        request.httpBody = jsonData
+        
+        return AsyncThrowingStream { continuation in
+            // 使用URLSession的bytes方法处理流式响应
+            Task {
+                do {
+                    let (bytes, response) = try await URLSession.shared.bytes(for: request)
+                    
+                    guard let httpResponse = response as? HTTPURLResponse else {
+                        throw URLError(.badServerResponse)
+                    }
+                    
+                    if httpResponse.statusCode != 200 {
+                        let errorMessage = "API error with status code: \(httpResponse.statusCode)"
+                        throw NSError(domain: "KimiAPIError", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: errorMessage])
+                    }
+                    
+                    // 处理流式数据
+                    var buffer = Data()
+                    for try await byte in bytes {
+                        buffer.append(byte)
+                        
+                        // 检查是否有完整的行
+                        if let index = buffer.firstIndex(of: UInt8(ascii: "\n")) {
+                            let lineData = buffer[..<index]
+                            buffer = buffer[index...].dropFirst()
+                            
+                            if let lineString = String(data: lineData, encoding: .utf8) {
+                                let trimmedLine = lineString.trimmingCharacters(in: .whitespaces)
+                                if trimmedLine.isEmpty || trimmedLine == "data: [DONE]" {
+                                    continue
+                                }
+                                
+                                if trimmedLine.hasPrefix("data: ") {
+                                    let jsonString = trimmedLine.dropFirst(5)
+                                    if let jsonData = jsonString.data(using: .utf8) {
+                                        do {
+                                            let streamResponse = try JSONDecoder.shared.decode(KimiStreamResponse.self, from: jsonData)
+                                            if let deltaContent = streamResponse.choices?.first?.delta.content, !deltaContent.isEmpty {
+                                                continuation.yield(deltaContent)
+                                            }
+                                            
+                                            if streamResponse.choices?.first?.finish_reason != nil {
+                                                continuation.finish()
+                                                return
+                                            }
+                                        } catch {
+                                            print("Error parsing stream response: \(error.localizedDescription)")
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
         }
     }
 }

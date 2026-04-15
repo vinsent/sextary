@@ -7,10 +7,14 @@
 
 import SwiftUI
 
-struct ChatMessage: Identifiable {
+struct ChatMessage: Identifiable, Equatable {
     let id = UUID()
     let content: String
     let isUser: Bool
+    
+    static func == (lhs: ChatMessage, rhs: ChatMessage) -> Bool {
+        return lhs.id == rhs.id && lhs.content == rhs.content && lhs.isUser == rhs.isUser
+    }
 }
 
 struct ChatView: View {
@@ -23,13 +27,23 @@ struct ChatView: View {
             VStack {
                 if viewModel.hasAPIKey {
                     // 消息列表
-                    ScrollView {
-                        LazyVStack(spacing: 16) {
-                            ForEach(viewModel.messages) { message in
-                                messageBubble(message: message)
+                    ScrollViewReader { proxy in
+                        ScrollView {
+                            LazyVStack(spacing: 16) {
+                                ForEach(viewModel.messages) { message in
+                                    messageBubble(message: message)
+                                        .id(message.id)
+                                }
+                            }
+                            .padding()
+                        }
+                        .onChange(of: viewModel.messages) { _ in
+                            if let lastMessage = viewModel.messages.last {
+                                withAnimation {
+                                    proxy.scrollTo(lastMessage.id, anchor: .bottom)
+                                }
                             }
                         }
-                        .padding()
                     }
                     
                     // 错误消息
