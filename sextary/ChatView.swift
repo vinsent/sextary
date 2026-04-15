@@ -71,15 +71,15 @@ struct ChatView: View {
                                 ProgressView()
                                     .progressViewStyle(CircularProgressViewStyle())
                                     .foregroundColor(.white)
-                                    .padding(12)
+                                    .frame(width: 44, height: 44)
                                     .background(Color.blue)
-                                    .cornerRadius(20)
+                                    .cornerRadius(22)
                             } else {
                                 Image(systemName: "paperplane")
                                     .foregroundColor(.white)
-                                    .padding(12)
-                                    .background(Color.blue)
-                                    .cornerRadius(20)
+                                    .frame(width: 44, height: 44)
+                                    .background(viewModel.inputText.isEmpty ? Color(red: 0.7, green: 0.7, blue: 0.7) : Color.blue)
+                                    .cornerRadius(22)
                             }
                         }
                         .disabled(viewModel.isLoading || viewModel.inputText.isEmpty)
@@ -115,19 +115,19 @@ struct ChatView: View {
         HStack(alignment: .top) {
             if message.isUser {
                 Spacer()
-                MarkdownText(content: message.content)
+                Text(message.content)
                     .padding()
                     .background(Color.blue)
                     .foregroundColor(.white)
                     .cornerRadius(16)
                     .padding(.leading, 40)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                    .fixedSize(horizontal: false, vertical: true)
             } else {
                 MarkdownText(content: message.content)
                     .padding()
-                    .background(Color.gray.opacity(0.2))
                     .foregroundColor(.primary)
-                    .cornerRadius(16)
-                    .padding(.trailing, 40)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 Spacer()
             }
         }

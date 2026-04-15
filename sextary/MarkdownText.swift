@@ -3,10 +3,12 @@ import MarkdownUI
 
 struct MarkdownText: View {
     let content: String
+    var foregroundColor: Color = .primary
     
     var body: some View {
         Markdown(content)
             .frame(maxWidth: .infinity, alignment: .leading)
+            .foregroundColor(foregroundColor)
     }
 }
 

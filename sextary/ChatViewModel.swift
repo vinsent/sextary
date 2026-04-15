@@ -53,9 +53,24 @@ final class ChatViewModel: ObservableObject {
         errorMessage = ""
         
         // 添加助手消息占位符
-        let assistantMessageId = UUID()
-        let placeholderMessage = ChatMessage(content: "", isUser: false)
+        let placeholderMessage = ChatMessage(content: "thinking...", isUser: false)
         messages.append(placeholderMessage)
+        
+        // 启动思考动画
+        var dotsCount = 0
+        let thinkingTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+            guard let self = self else { return }
+            dotsCount = (dotsCount + 1) % 4
+            let dots = String(repeating: ".", count: dotsCount)
+            
+            Task {
+                await MainActor.run {
+                    if let lastIndex = self.messages.indices.last, !self.messages[lastIndex].isUser {
+                        self.messages[lastIndex] = ChatMessage(content: "thinking\(dots)", isUser: false)
+                    }
+                }
+            }
+        }
         
         // 发送消息到Kimi API
         Task {
@@ -66,6 +81,9 @@ final class ChatViewModel: ObservableObject {
                 ]
                 
                 let stream = try await apiService.stream(messagesForAPI)
+                
+                // 停止思考动画
+                thinkingTimer.invalidate()
                 
                 // 处理流式响应
                 var accumulatedContent = ""
@@ -80,6 +98,9 @@ final class ChatViewModel: ObservableObject {
                     }
                 }
             } catch {
+                // 停止思考动画
+                thinkingTimer.invalidate()
+                
                 await MainActor.run {
                     errorMessage = "Error: \(error.localizedDescription)"
                     // 移除占位符消息
