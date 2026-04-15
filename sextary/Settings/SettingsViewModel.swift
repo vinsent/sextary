@@ -14,7 +14,7 @@ class SettingsViewModel: ObservableObject {
     
     func checkAPIKeyStatus() {
         if let apiKey = keychainManager.getAPIKey() {
-            // 只显示API密钥的前几位，保护隐私
+            // Only show the first few digits of the API key to protect privacy
             let maskedKey = String(apiKey.prefix(4)) + "..."
             apiKeyStatus = "API Key: \(maskedKey)"
         } else {

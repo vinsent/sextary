@@ -17,10 +17,10 @@ class KeychainManager {
             kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlocked
         ]
         
-        // 删除已有的API密钥（如果存在）
+        // Delete existing API key if it exists
         SecItemDelete(query as CFDictionary)
         
-        // 保存新的API密钥
+        // Save new API key
         let status = SecItemAdd(query as CFDictionary, nil)
         if status != errSecSuccess {
             throw NSError(domain: "KeychainError", code: Int(status), userInfo: nil)

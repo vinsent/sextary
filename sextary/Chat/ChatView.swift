@@ -6,17 +6,6 @@
 //
 
 import SwiftUI
-import UIKit
-
-struct ChatMessage: Identifiable, Equatable {
-    let id = UUID()
-    let content: String
-    let isUser: Bool
-    
-    static func == (lhs: ChatMessage, rhs: ChatMessage) -> Bool {
-        return lhs.id == rhs.id && lhs.content == rhs.content && lhs.isUser == rhs.isUser
-    }
-}
 
 struct ChatView: View {
     @State private var showAPIKeyView: Bool = false

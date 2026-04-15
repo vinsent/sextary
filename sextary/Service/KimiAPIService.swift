@@ -109,15 +109,15 @@ class KimiAPIService {
     }
     
     func send(_ messages: [Message]) async throws -> KimiChatResponse {
-        // Kimi API endpoint - 使用官方中国区域端点
+        // Kimi API endpoint - using official China region endpoint
         var request = URLRequest(url: URL(string: "https://api.moonshot.cn/v1/chat/completions")!)
         request.httpMethod = "POST"
-        // 确保API Key格式正确
+        // Ensure API Key format is correct
         let trimmedKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         request.addValue("Bearer \(trimmedKey)", forHTTPHeaderField: "Authorization")
         request.addValue("application/json", forHTTPHeaderField: "Content-Type")
         
-        // 创建Kimi API请求
+        // Create Kimi API request
         let kimiRequest = KimiChatRequest(
             model: "kimi-k2.5",
             messages: messages,
@@ -131,7 +131,7 @@ class KimiAPIService {
             // Get Kimi API response
             let (data, response) = try await URLSession.shared.data(for: request)
             
-            // 首先检查data是否为空
+            // First check if data is empty
             guard !data.isEmpty else {
                 print("Error: Empty response data")
                 throw URLError(.badServerResponse)
@@ -178,15 +178,15 @@ class KimiAPIService {
     }
     
     func stream(_ messages: [Message]) async throws -> AsyncThrowingStream<String, Error> {
-        // Kimi API endpoint - 使用官方中国区域端点
+        // Kimi API endpoint - using official China region endpoint
         var request = URLRequest(url: URL(string: "https://api.moonshot.cn/v1/chat/completions")!)
         request.httpMethod = "POST"
-        // 确保API Key格式正确
+        // Ensure API Key format is correct
         let trimmedKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         request.addValue("Bearer \(trimmedKey)", forHTTPHeaderField: "Authorization")
         request.addValue("application/json", forHTTPHeaderField: "Content-Type")
         
-        // 创建Kimi API请求，启用stream
+        // Create Kimi API request with stream enabled
         let kimiRequest = KimiChatRequest(
             model: "kimi-k2.5",
             messages: messages,
@@ -197,7 +197,7 @@ class KimiAPIService {
         request.httpBody = jsonData
         
         return AsyncThrowingStream { continuation in
-            // 使用URLSession的bytes方法处理流式响应
+            // Use URLSession's bytes method to handle streaming response
             Task {
                 do {
                     let (bytes, response) = try await URLSession.shared.bytes(for: request)
@@ -211,12 +211,12 @@ class KimiAPIService {
                         throw NSError(domain: "KimiAPIError", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: errorMessage])
                     }
                     
-                    // 处理流式数据
+                    // Process streaming data
                     var buffer = Data()
                     for try await byte in bytes {
                         buffer.append(byte)
                         
-                        // 检查是否有完整的行
+                        // Check if there's a complete line
                         if let index = buffer.firstIndex(of: UInt8(ascii: "\n")) {
                             let lineData = buffer[..<index]
                             buffer = buffer[index...].dropFirst()
