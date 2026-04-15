@@ -31,7 +31,7 @@ class APIKeyViewModel: ObservableObject {
             do {
                 try keychainManager.saveAPIKey(apiKey)
                 showSuccess = true
-                // 延迟一秒后调用回调
+                // Delay one second before calling callback
                 try await Task.sleep(nanoseconds: 1_000_000_000)
                 onSave()
             } catch {
