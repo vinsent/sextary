@@ -101,14 +101,14 @@ struct ChatView: View {
         HStack(alignment: .top) {
             if message.isUser {
                 Spacer()
-                Text(message.content)
+                MarkdownText(content: message.content)
                     .padding()
                     .background(Color.blue)
                     .foregroundColor(.white)
                     .cornerRadius(16)
                     .padding(.leading, 40)
             } else {
-                Text(message.content)
+                MarkdownText(content: message.content)
                     .padding()
                     .background(Color.gray.opacity(0.2))
                     .foregroundColor(.primary)
