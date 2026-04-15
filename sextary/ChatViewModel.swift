@@ -24,6 +24,7 @@ final class ChatViewModel: ObservableObject {
     private var recognitionTask: SFSpeechRecognitionTask?
     private var isCancelledByUser: Bool = false
     private var thinkingTimer: Timer?
+    private var isThinkingAnimationRunning: Bool = false
     
     init(apiService: KimiAPIService? = nil, keychainManager: KeychainManager = KeychainManager.shared) {
         self.apiService = apiService
@@ -66,12 +67,13 @@ final class ChatViewModel: ObservableObject {
         errorMessage = ""
         
         // Add assistant message placeholder
-        let placeholderMessage = ChatMessage(content: "thinking.", isUser: false)
+        let placeholderMessage = ChatMessage(content: "thinking", isUser: false)
         messages.append(placeholderMessage)
         
         // Start thinking animation
         // Use DispatchQueue.main.asyncAfter instead of Timer to ensure the animation triggers correctly
         DispatchQueue.main.async {
+            self.isThinkingAnimationRunning = true
             self.animateThinkingDots(dotsCount: 1)
         }
         
@@ -85,11 +87,6 @@ final class ChatViewModel: ObservableObject {
                 
                 let stream = try await apiService.stream(messagesForAPI)
                 
-                // Stop thinking animation
-                await MainActor.run {
-                    thinkingTimer?.invalidate()
-                }
-                
                 // Handle streaming response
                 var accumulatedContent = ""
                 for try await chunk in stream {
@@ -100,12 +97,18 @@ final class ChatViewModel: ObservableObject {
                         if let lastIndex = messages.indices.last, !messages[lastIndex].isUser {
                             messages[lastIndex] = ChatMessage(content: accumulatedContent, isUser: false)
                         }
+                        
+                        // Stop thinking animation
+                        if self.isThinkingAnimationRunning {
+                            self.isThinkingAnimationRunning = false
+                        }
                     }
                 }
             } catch {
                 // Stop thinking animation
                 await MainActor.run {
                     thinkingTimer?.invalidate()
+                    self.isThinkingAnimationRunning = false
                 }
                 
                 await MainActor.run {
@@ -385,7 +388,7 @@ final class ChatViewModel: ObservableObject {
     // Thinking animation
     private func animateThinkingDots(dotsCount: Int) {
         // Check if animation needs to continue
-        guard isLoading else { return }
+        guard isLoading && isThinkingAnimationRunning else { return }
         
         // Update dotsCount
         let newDotsCount = dotsCount % 3 + 1
@@ -398,7 +401,10 @@ final class ChatViewModel: ObservableObject {
         
         // Delay 0.5 seconds before continuing animation
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            self.animateThinkingDots(dotsCount: newDotsCount)
+            // Check again if animation should continue
+            if self.isLoading && self.isThinkingAnimationRunning {
+                self.animateThinkingDots(dotsCount: newDotsCount)
+            }
         }
     }
 }

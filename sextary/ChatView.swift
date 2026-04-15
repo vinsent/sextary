@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import UIKit
 
 struct ChatMessage: Identifiable, Equatable {
     let id = UUID()
@@ -22,113 +23,156 @@ struct ChatView: View {
     @State private var showSettingsView: Bool = false
     @GestureState private var isDragging: Bool = false
     @State private var dragOffset: CGSize = .zero
+    @State private var keyboardHeight: CGFloat = 0
+    @State private var scrollViewContentHeight: CGFloat = 0
+    @State private var scrollViewFrameHeight: CGFloat = 0
     @StateObject private var viewModel: ChatViewModel = ChatViewModel()
+    
+    private let keyboardWillShowPublisher = NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)
+    private let keyboardWillHidePublisher = NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)
     
     var body: some View {
         ZStack {
             NavigationStack {
                 VStack {
-                    if viewModel.hasAPIKey {
-                        // Message list
-                        ScrollViewReader { proxy in
-                            ScrollView {
-                                LazyVStack(spacing: 16) {
-                                    ForEach(viewModel.messages) { message in
-                                        messageBubble(message: message)
-                                            .id(message.id)
-                                    }
+                    // Message list
+                    ScrollViewReader { proxy in
+                        ScrollView {
+                            LazyVStack(spacing: 16) {
+                                ForEach(viewModel.messages) { message in
+                                    messageBubble(message: message)
+                                        .id(message.id)
                                 }
-                                .padding()
                             }
-                            .onChange(of: viewModel.messages) { _, _ in
-                                if let lastMessage = viewModel.messages.last {
-                                    withAnimation {
-                                        proxy.scrollTo(lastMessage.id, anchor: .bottom)
+                            .padding()
+                            .background(
+                                GeometryReader { geometry in
+                                    Color.clear
+                                        .onAppear {
+                                            scrollViewContentHeight = geometry.size.height
+                                        }
+                                        .onChange(of: viewModel.messages) {
+                                            scrollViewContentHeight = geometry.size.height
+                                        }
+                                }
+                            )
+                        }
+                        .frame(maxHeight: .infinity)
+                        .background(
+                            GeometryReader { geometry in
+                                Color.clear
+                                    .onAppear {
+                                        scrollViewFrameHeight = geometry.size.height
+                                    }
+                            }
+                        )
+                        .onChange(of: viewModel.messages) { _, _ in
+                            if let lastMessage = viewModel.messages.last {
+                                withAnimation {
+                                    proxy.scrollTo(lastMessage.id, anchor: .bottom)
+                                }
+                            }
+                        }
+                        .onReceive(keyboardWillShowPublisher) { notification in
+                            // Calculate keyboard height
+                            if let keyboardFrame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect {
+                                keyboardHeight = keyboardFrame.height
+                                
+                                // Check if scroll view is near the bottom
+                                let contentHeight = scrollViewContentHeight
+                                let frameHeight = scrollViewFrameHeight
+                                let contentOffset = contentHeight - frameHeight
+                                
+                                // If content is longer than frame and we're near the bottom
+                                if contentHeight > frameHeight && contentOffset > -50 {
+                                    // Scroll to bottom
+                                    if let lastMessage = viewModel.messages.last {
+                                        withAnimation {
+                                            proxy.scrollTo(lastMessage.id, anchor: .bottom)
+                                        }
                                     }
                                 }
                             }
                         }
+                    }
+                    
+                    // Error message
+                    if !viewModel.errorMessage.isEmpty {
+                        Text(viewModel.errorMessage)
+                            .foregroundColor(.red)
+                            .font(.footnote)
+                            .padding(.horizontal)
+                            .padding(.bottom, 8)
+                    }
+                    
+                    // Input area
+                    HStack {
+                        TextField("Type a message...", text: $viewModel.inputText)
+                            .padding()
+                            .background(RoundedRectangle(cornerRadius: 20).stroke(Color.gray, lineWidth: 1))
+                            .disabled(viewModel.isLoading)
                         
-                        // Error message
-                        if !viewModel.errorMessage.isEmpty {
-                            Text(viewModel.errorMessage)
-                                .foregroundColor(.red)
-                                .font(.footnote)
-                                .padding(.horizontal)
-                                .padding(.bottom, 8)
-                        }
-                        
-                        // Input area
-                        HStack {
-                            TextField("Type a message...", text: $viewModel.inputText)
-                                .padding()
-                                .background(RoundedRectangle(cornerRadius: 20).stroke(Color.gray, lineWidth: 1))
-                                .disabled(viewModel.isLoading)
-                            
-                            if (viewModel.inputText.isEmpty || viewModel.isRecording) && !viewModel.isLoading {
-                                // Voice input button
-                                ZStack {
-                                    Image(systemName: "mic")
+                        if (viewModel.inputText.isEmpty || viewModel.isRecording) && !viewModel.isLoading {
+                            // Voice input button
+                            ZStack {
+                                Image(systemName: "mic")
+                                    .foregroundColor(.white)
+                                    .frame(width: 44, height: 44)
+                                    .background(Color.blue)
+                                    .cornerRadius(22)
+                            }
+                            .contentShape(Rectangle())
+                            .gesture(
+                                DragGesture(minimumDistance: 0, coordinateSpace: .local)
+                                    .onChanged { value in
+                                        if !viewModel.isRecording {
+                                            print("Long press started")
+                                            viewModel.startRecording()
+                                        } else {
+                                            dragOffset = value.translation
+                                            if dragOffset.height < -50 {
+                                                viewModel.recordingCancelled = true
+                                            } else {
+                                                viewModel.recordingCancelled = false
+                                            }
+                                        }
+                                    }
+                                    .onEnded { value in
+                                        print("Long press ended, dragOffset: \(dragOffset.height)")
+                                        if dragOffset.height < -50 {
+                                            viewModel.cancelRecording()
+                                        } else {
+                                            viewModel.stopRecording()
+                                        }
+                                        dragOffset = .zero
+                                    }
+                            )
+                        } else {
+                            // Send button
+                            Button(action: {
+                                print("Send button tapped")
+                                print("Input text: \(viewModel.inputText)")
+                                viewModel.sendMessage()
+                            }) {
+                                if viewModel.isLoading {
+                                    ProgressView()
+                                        .progressViewStyle(CircularProgressViewStyle())
                                         .foregroundColor(.white)
                                         .frame(width: 44, height: 44)
                                         .background(Color.blue)
                                         .cornerRadius(22)
+                                } else {
+                                    Image(systemName: "paperplane")
+                                        .foregroundColor(.white)
+                                        .frame(width: 44, height: 44)
+                                        .background(viewModel.inputText.isEmpty ? Color(red: 0.7, green: 0.7, blue: 0.7) : Color.blue)
+                                        .cornerRadius(22)
                                 }
-                                .contentShape(Rectangle())
-                                .gesture(
-                                    DragGesture(minimumDistance: 0, coordinateSpace: .local)
-                                        .onChanged { value in
-                                            if !viewModel.isRecording {
-                                                print("Long press started")
-                                                viewModel.startRecording()
-                                            } else {
-                                                dragOffset = value.translation
-                                                if dragOffset.height < -50 {
-                                                    viewModel.recordingCancelled = true
-                                                } else {
-                                                    viewModel.recordingCancelled = false
-                                                }
-                                            }
-                                        }
-                                        .onEnded { value in
-                                            print("Long press ended, dragOffset: \(dragOffset.height)")
-                                            if dragOffset.height < -50 {
-                                                viewModel.cancelRecording()
-                                            } else {
-                                                viewModel.stopRecording()
-                                            }
-                                            dragOffset = .zero
-                                        }
-                                )
-                            } else {
-                                // Send button
-                                Button(action: {
-                                    print("Send button tapped")
-                                    print("Input text: \(viewModel.inputText)")
-                                    viewModel.sendMessage()
-                                }) {
-                                    if viewModel.isLoading {
-                                        ProgressView()
-                                            .progressViewStyle(CircularProgressViewStyle())
-                                            .foregroundColor(.white)
-                                            .frame(width: 44, height: 44)
-                                            .background(Color.blue)
-                                            .cornerRadius(22)
-                                    } else {
-                                        Image(systemName: "paperplane")
-                                            .foregroundColor(.white)
-                                            .frame(width: 44, height: 44)
-                                            .background(viewModel.inputText.isEmpty ? Color(red: 0.7, green: 0.7, blue: 0.7) : Color.blue)
-                                            .cornerRadius(22)
-                                    }
-                                }
-                                .disabled(viewModel.isLoading || viewModel.inputText.isEmpty)
                             }
+                            .disabled(viewModel.isLoading || viewModel.inputText.isEmpty)
                         }
-                        .padding()
-                    } else {
-                        Text("Loading...")
                     }
+                    .padding()
                 }
                 .navigationTitle("Sextary")
                 .navigationBarItems(trailing: Button(action: { showSettingsView = true }) {
