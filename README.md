@@ -1,2 +1,2 @@
-# A sample AI agent on iOS
+# An AI Chatbot on iOS
 
