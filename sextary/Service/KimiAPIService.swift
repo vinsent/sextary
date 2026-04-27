@@ -1,4 +1,5 @@
 import Foundation
+import Alamofire
 
 struct Message: Encodable {
     enum Role: String, Encodable {
@@ -110,12 +111,13 @@ class KimiAPIService {
     
     func send(_ messages: [Message]) async throws -> KimiChatResponse {
         // Kimi API endpoint - using official China region endpoint
-        var request = URLRequest(url: URL(string: "https://api.moonshot.cn/v1/chat/completions")!)
-        request.httpMethod = "POST"
+        let url = "https://api.moonshot.cn/v1/chat/completions"
         // Ensure API Key format is correct
         let trimmedKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
-        request.addValue("Bearer \(trimmedKey)", forHTTPHeaderField: "Authorization")
-        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
+        let headers: HTTPHeaders = [
+            "Authorization": "Bearer \(trimmedKey)",
+            "Content-Type": "application/json"
+        ]
         
         // Create Kimi API request
         let kimiRequest = KimiChatRequest(
@@ -124,12 +126,13 @@ class KimiAPIService {
             stream: false
         )
         
-        let jsonData = try JSONEncoder.shared.encode(kimiRequest)
-        request.httpBody = jsonData
-        
         do {
+            // Encode request to JSON
+            let jsonData = try JSONEncoder.shared.encode(kimiRequest)
+            let parameters = try JSONSerialization.jsonObject(with: jsonData, options: []) as? Parameters ?? [:]
+            
             // Get Kimi API response
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await NetworkService.shared.requestWithData(url, method: .post, parameters: parameters, headers: headers)
             
             // First check if data is empty
             guard !data.isEmpty else {
@@ -137,11 +140,7 @@ class KimiAPIService {
                 throw URLError(.badServerResponse)
             }
             
-            guard let httpResponse = response as? HTTPURLResponse else {
-                throw URLError(.badServerResponse)
-            }
-            
-            if httpResponse.statusCode != 200 {
+            if response.statusCode != 200 {
                 let responseString = String(data: data, encoding: .utf8) ?? "No response data"
                 print("Error response: \(responseString)")
                 
@@ -153,7 +152,7 @@ class KimiAPIService {
                 } catch {
                     // If parsing fails, create a custom error with the response string
                     print("Error parsing error response: \(error.localizedDescription)")
-                    let customError = NSError(domain: "KimiAPIError", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: "API error: \(responseString)"])
+                    let customError = NSError(domain: "KimiAPIError", code: response.statusCode, userInfo: [NSLocalizedDescriptionKey: "API error: \(responseString)"])
                     throw customError
                 }
             }
@@ -166,8 +165,8 @@ class KimiAPIService {
             // Handle Kimi API errors first
             print("Kimi API error: \(error.message) (\(error.code ?? "unknown"))")
             throw error
-        } catch let error as URLError {
-            // Handle network errors
+        } catch let error as AFError {
+            // Handle Alamofire errors
             print("Network error: \(error.localizedDescription)")
             throw error
         } catch {
@@ -179,12 +178,13 @@ class KimiAPIService {
     
     func stream(_ messages: [Message]) async throws -> AsyncThrowingStream<String, Error> {
         // Kimi API endpoint - using official China region endpoint
-        var request = URLRequest(url: URL(string: "https://api.moonshot.cn/v1/chat/completions")!)
-        request.httpMethod = "POST"
+        let url = "https://api.moonshot.cn/v1/chat/completions"
         // Ensure API Key format is correct
         let trimmedKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
-        request.addValue("Bearer \(trimmedKey)", forHTTPHeaderField: "Authorization")
-        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
+        let headers: HTTPHeaders = [
+            "Authorization": "Bearer \(trimmedKey)",
+            "Content-Type": "application/json"
+        ]
         
         // Create Kimi API request with stream enabled
         let kimiRequest = KimiChatRequest(
@@ -193,62 +193,34 @@ class KimiAPIService {
             stream: true
         )
         
+        // Encode request to JSON
         let jsonData = try JSONEncoder.shared.encode(kimiRequest)
-        request.httpBody = jsonData
+        let parameters = try JSONSerialization.jsonObject(with: jsonData, options: []) as? Parameters ?? [:]
         
+        // Use NetworkService for streaming request
+        let stream = NetworkService.shared.streamRequest(url, method: .post, parameters: parameters, headers: headers)
+        
+        // Process the stream and yield only the content
         return AsyncThrowingStream { continuation in
-            // Use URLSession's bytes method to handle streaming response
             Task {
                 do {
-                    let (bytes, response) = try await URLSession.shared.bytes(for: request)
-                    
-                    guard let httpResponse = response as? HTTPURLResponse else {
-                        throw URLError(.badServerResponse)
-                    }
-                    
-                    if httpResponse.statusCode != 200 {
-                        let errorMessage = "API error with status code: \(httpResponse.statusCode)"
-                        throw NSError(domain: "KimiAPIError", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: errorMessage])
-                    }
-                    
-                    // Process streaming data
-                    var buffer = Data()
-                    for try await byte in bytes {
-                        buffer.append(byte)
-                        
-                        // Check if there's a complete line
-                        if let index = buffer.firstIndex(of: UInt8(ascii: "\n")) {
-                            let lineData = buffer[..<index]
-                            buffer = buffer[index...].dropFirst()
-                            
-                            if let lineString = String(data: lineData, encoding: .utf8) {
-                                let trimmedLine = lineString.trimmingCharacters(in: .whitespaces)
-                                if trimmedLine.isEmpty || trimmedLine == "data: [DONE]" {
-                                    continue
+                    for try await jsonString in stream {
+                        if let jsonData = jsonString.data(using: .utf8) {
+                            do {
+                                let streamResponse = try JSONDecoder.shared.decode(KimiStreamResponse.self, from: jsonData)
+                                if let deltaContent = streamResponse.choices?.first?.delta.content, !deltaContent.isEmpty {
+                                    continuation.yield(deltaContent)
                                 }
                                 
-                                if trimmedLine.hasPrefix("data: ") {
-                                    let jsonString = trimmedLine.dropFirst(5)
-                                    if let jsonData = jsonString.data(using: .utf8) {
-                                        do {
-                                            let streamResponse = try JSONDecoder.shared.decode(KimiStreamResponse.self, from: jsonData)
-                                            if let deltaContent = streamResponse.choices?.first?.delta.content, !deltaContent.isEmpty {
-                                                continuation.yield(deltaContent)
-                                            }
-                                            
-                                            if streamResponse.choices?.first?.finish_reason != nil {
-                                                continuation.finish()
-                                                return
-                                            }
-                                        } catch {
-                                            print("Error parsing stream response: \(error.localizedDescription)")
-                                        }
-                                    }
+                                if streamResponse.choices?.first?.finish_reason != nil {
+                                    continuation.finish()
+                                    return
                                 }
+                            } catch {
+                                print("Error parsing stream response: \(error.localizedDescription)")
                             }
                         }
                     }
-                    
                     continuation.finish()
                 } catch {
                     continuation.finish(throwing: error)
