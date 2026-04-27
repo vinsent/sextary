@@ -100,6 +100,10 @@ struct ChatView: View {
                             .padding()
                             .background(RoundedRectangle(cornerRadius: 20).stroke(Color.gray, lineWidth: 1))
                             .disabled(viewModel.isLoading)
+                            .submitLabel(.send)
+                            .onSubmit {
+                                viewModel.sendMessage()
+                            }
                         
                         if (viewModel.inputText.isEmpty || viewModel.isRecording) && !viewModel.isLoading {
                             // Voice input button
