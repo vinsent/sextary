@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		3A9624C42F9F1161005E03E4 /* Alamofire in Frameworks */ = {isa = PBXBuildFile; productRef = 3A9624C32F9F1161005E03E4 /* Alamofire */; };
 		3A96639B2F8EAAFF0079A23F /* MarkdownUI in Frameworks */ = {isa = PBXBuildFile; productRef = 3A96639A2F8EAAFF0079A23F /* MarkdownUI */; };
 /* End PBXBuildFile section */
 
@@ -44,6 +45,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				3A96639B2F8EAAFF0079A23F /* MarkdownUI in Frameworks */,
+				3A9624C42F9F1161005E03E4 /* Alamofire in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -96,6 +98,7 @@
 			name = sextary;
 			packageProductDependencies = (
 				3A96639A2F8EAAFF0079A23F /* MarkdownUI */,
+				3A9624C32F9F1161005E03E4 /* Alamofire */,
 			);
 			productName = sextary;
 			productReference = 3A133F7E2F8D2887003A94A2 /* sextary.app */;
@@ -154,6 +157,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				3A9663992F8EAAFF0079A23F /* XCRemoteSwiftPackageReference "swift-markdown-ui" */,
+				3A9624C22F9F1161005E03E4 /* XCRemoteSwiftPackageReference "Alamofire" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 3A133F7F2F8D2887003A94A2 /* Products */;
@@ -473,6 +477,14 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		3A9624C22F9F1161005E03E4 /* XCRemoteSwiftPackageReference "Alamofire" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/Alamofire/Alamofire";
+			requirement = {
+				kind = exactVersion;
+				version = 5.11.2;
+			};
+		};
 		3A9663992F8EAAFF0079A23F /* XCRemoteSwiftPackageReference "swift-markdown-ui" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/gonzalezreal/swift-markdown-ui";
@@ -484,6 +496,11 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		3A9624C32F9F1161005E03E4 /* Alamofire */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 3A9624C22F9F1161005E03E4 /* XCRemoteSwiftPackageReference "Alamofire" */;
+			productName = Alamofire;
+		};
 		3A96639A2F8EAAFF0079A23F /* MarkdownUI */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 3A9663992F8EAAFF0079A23F /* XCRemoteSwiftPackageReference "swift-markdown-ui" */;
