@@ -2,6 +2,7 @@ import Foundation
 import Combine
 import AVFoundation
 import Speech
+import SQLite
 
 final class ChatViewModel: ObservableObject {
     @Published var inputText: String = ""
@@ -13,7 +14,9 @@ final class ChatViewModel: ObservableObject {
     @Published var recordingLevel: Float = 0.0
     @Published var recordingCancelled: Bool = false
     @Published var recognizedText: String = ""
-    
+    @Published var conversations: [Conversation] = []
+    @Published var currentConversationId: String?
+
     private var apiKey: String? = nil
     private var apiService: KimiAPIService? = nil
     private let keychainManager: KeychainManager
@@ -25,10 +28,16 @@ final class ChatViewModel: ObservableObject {
     private var isCancelledByUser: Bool = false
     private var thinkingTimer: Timer?
     private var isThinkingAnimationRunning: Bool = false
-    
+
+    private var databaseManager: DatabaseManager?
+    private var conversationStore: ConversationStore?
+    private var messageStore: MessageStore?
+    private var settingsStore: SettingsStore?
+
     init(apiService: KimiAPIService? = nil, keychainManager: KeychainManager = KeychainManager.shared) {
         self.apiService = apiService
         self.keychainManager = keychainManager
+        setupDatabase()
         initializeMessages()
         checkAPIKeyStatus()
     }
@@ -46,58 +55,175 @@ final class ChatViewModel: ObservableObject {
             self.apiService = KimiAPIService(with: apiKey)
         }
     }
-    
+
+    private func setupDatabase() {
+        databaseManager = DatabaseManager.shared
+        do {
+            try databaseManager?.setup()
+            guard let db = try databaseManager?.getConnection() else { return }
+            conversationStore = ConversationStore(db: db)
+            messageStore = MessageStore(db: db)
+            settingsStore = SettingsStore(db: db)
+            loadConversations()
+        } catch {
+            print("Database setup error: \(error)")
+        }
+    }
+
     private func initializeMessages() {
-        messages.append(ChatMessage(content: "Hello! I'm your AI assistant. How can I help you today?", isUser: false))
+        if conversations.isEmpty {
+            createNewConversation()
+        } else {
+            loadCurrentConversation()
+        }
+    }
+
+    func loadConversations() {
+        guard let conversationStore = conversationStore else { return }
+        do {
+            conversations = try conversationStore.fetchAll()
+            if let last = conversations.first {
+                currentConversationId = last.id
+            }
+        } catch {
+            print("Load conversations error: \(error)")
+        }
+    }
+
+    func loadCurrentConversation() {
+        guard let conversationId = currentConversationId,
+              let messageStore = messageStore else { return }
+        do {
+            let dbMessages = try messageStore.fetchByConversationId(conversationId)
+            messages = dbMessages.map { dbMsg in
+                ChatMessage(
+                    id: UUID(uuidString: dbMsg.id) ?? UUID(),
+                    content: dbMsg.content,
+                    isUser: dbMsg.isUser,
+                    createdAt: dbMsg.createdAt,
+                    tokens: dbMsg.tokens
+                )
+            }
+        } catch {
+            print("Load messages error: \(error)")
+        }
+    }
+
+    func createNewConversation() {
+        guard let conversationStore = conversationStore else { return }
+        do {
+            let newConv = try conversationStore.create(title: "New Conversation")
+            conversations.insert(newConv, at: 0)
+            currentConversationId = newConv.id
+            messages.removeAll()
+        } catch {
+            print("Create conversation error: \(error)")
+        }
+    }
+
+    func selectConversation(id: String) {
+        currentConversationId = id
+        loadCurrentConversation()
+    }
+
+    func deleteConversation(id: String) {
+        guard let conversationStore = conversationStore else { return }
+        do {
+            try conversationStore.delete(id: id)
+            conversations.removeAll { $0.id == id }
+            if currentConversationId == id {
+                createNewConversation()
+            }
+        } catch {
+            print("Delete conversation error: \(error)")
+        }
+    }
+
+    private func saveUserMessage(_ content: String) {
+        guard let conversationId = currentConversationId,
+              let messageStore = messageStore,
+              let conversationStore = conversationStore else { return }
+        do {
+            _ = try messageStore.create(
+                conversationId: conversationId,
+                content: content,
+                isUser: true
+            )
+            let count = try messageStore.countByConversationId(conversationId)
+            try conversationStore.updateMessageCount(id: conversationId, count: count)
+        } catch {
+            print("Save user message error: \(error)")
+        }
+    }
+
+    private func saveAssistantMessage(_ content: String, tokens: Int? = nil) {
+        guard let conversationId = currentConversationId,
+              let messageStore = messageStore,
+              let conversationStore = conversationStore else { return }
+        do {
+            _ = try messageStore.create(
+                conversationId: conversationId,
+                content: content,
+                isUser: false,
+                tokens: tokens
+            )
+            let count = try messageStore.countByConversationId(conversationId)
+            try conversationStore.updateMessageCount(id: conversationId, count: count)
+        } catch {
+            print("Save assistant message error: \(error)")
+        }
     }
     
     func sendMessage() {
         guard !inputText.isEmpty, let apiService = apiService else { return }
-        
+
         // Add user message
         let userMessage = ChatMessage(content: inputText, isUser: true)
         messages.append(userMessage)
-        
+        saveUserMessage(inputText)
+
         // Clear input field
         let messageText = inputText
         inputText = ""
-        
+
         // Show loading status
         isLoading = true
         errorMessage = ""
-        
+
         // Add assistant message placeholder
         let placeholderMessage = ChatMessage(content: "thinking", isUser: false)
         messages.append(placeholderMessage)
-        
+
         // Start thinking animation
         // Use DispatchQueue.main.asyncAfter instead of Timer to ensure the animation triggers correctly
         DispatchQueue.main.async {
             self.isThinkingAnimationRunning = true
             self.animateThinkingDots(dotsCount: 1)
         }
-        
+
         // Send message to Kimi API
         Task {
+            var finalContent = ""
             do {
                 let messagesForAPI = [
                     Message.system("You are a helpful AI assistant that responds to user queries in a friendly and informative manner."),
                     Message.user(messageText)
                 ]
-                
+
                 let stream = try await apiService.stream(messagesForAPI)
-                
+
                 // Handle streaming response
                 var accumulatedContent = ""
                 for try await chunk in stream {
                     accumulatedContent += chunk
-                    
+                    finalContent = accumulatedContent
+
                     // Update assistant message
                     await MainActor.run {
                         if let lastIndex = messages.indices.last, !messages[lastIndex].isUser {
                             messages[lastIndex] = ChatMessage(content: accumulatedContent, isUser: false)
                         }
-                        
+
                         // Stop thinking animation
                         if self.isThinkingAnimationRunning {
                             self.isThinkingAnimationRunning = false
@@ -110,7 +236,7 @@ final class ChatViewModel: ObservableObject {
                     thinkingTimer?.invalidate()
                     self.isThinkingAnimationRunning = false
                 }
-                
+
                 await MainActor.run {
                     errorMessage = "Error: \(error.localizedDescription)"
                     // Remove placeholder message
@@ -119,10 +245,13 @@ final class ChatViewModel: ObservableObject {
                     }
                 }
             }
-            
-            // Close loading status regardless of success or failure
+
+            // Close loading status and save final assistant message
             await MainActor.run {
                 isLoading = false
+                if !finalContent.isEmpty {
+                    saveAssistantMessage(finalContent)
+                }
             }
         }
     }

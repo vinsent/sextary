@@ -10,6 +10,7 @@ import SwiftUI
 struct ChatView: View {
     @State private var showAPIKeyView: Bool = false
     @State private var showSettingsView: Bool = false
+    @State private var showConversationList: Bool = false
     @GestureState private var isDragging: Bool = false
     @State private var dragOffset: CGSize = .zero
     @State private var keyboardHeight: CGFloat = 0
@@ -168,9 +169,119 @@ struct ChatView: View {
                     .padding()
                 }
                 .navigationTitle("Sextary")
-                .navigationBarItems(trailing: Button(action: { showSettingsView = true }) {
-                    Image(systemName: "gear")
-                })
+                .navigationBarItems(
+                    leading: Button(action: {
+                        withAnimation {
+                            showConversationList = true
+                        }
+                    }) {
+                        Image(systemName: "list.bullet")
+                    },
+                    trailing: Button(action: { showSettingsView = true }) {
+                        Image(systemName: "gear")
+                    }
+                )
+            }
+            
+            // Conversation list sidebar
+            if showConversationList {
+                Color.black.opacity(0.3)
+                    .ignoresSafeArea()
+                    .onTapGesture {
+                        withAnimation {
+                            showConversationList = false
+                        }
+                    }
+                    .transition(.opacity)
+
+                HStack {
+                    VStack(alignment: .leading, spacing: 0) {
+                        // Header
+                        HStack {
+                            Text("Conversations")
+                                .font(.headline)
+                                .fontWeight(.bold)
+                            Spacer()
+                            Button(action: {
+                                withAnimation {
+                                    showConversationList = false
+                                }
+                            }) {
+                                Image(systemName: "xmark.circle.fill")
+                                    .foregroundColor(.gray)
+                            }
+                        }
+                        .padding()
+                        .background(Color(UIColor.systemBackground))
+
+                        Divider()
+
+                        // New conversation button
+                        Button(action: {
+                            viewModel.createNewConversation()
+                            withAnimation {
+                                showConversationList = false
+                            }
+                        }) {
+                            HStack {
+                                Image(systemName: "plus.circle")
+                                Text("New Conversation")
+                                Spacer()
+                            }
+                            .padding()
+                            .background(Color.blue.opacity(0.1))
+                        }
+
+                        Divider()
+
+                        // Conversation list
+                        ScrollView {
+                            LazyVStack(spacing: 0) {
+                                ForEach(viewModel.conversations) { conversation in
+                                    Button(action: {
+                                        viewModel.selectConversation(id: conversation.id)
+                                        withAnimation {
+                                            showConversationList = false
+                                        }
+                                    }) {
+                                        HStack {
+                                            VStack(alignment: .leading, spacing: 4) {
+                                                Text(conversation.title)
+                                                    .font(.subheadline)
+                                                    .fontWeight(.medium)
+                                                Text("\(conversation.messageCount) messages")
+                                                    .font(.caption)
+                                                    .foregroundColor(.gray)
+                                            }
+                                            Spacer()
+                                        }
+                                        .padding()
+                                        .background(conversation.id == viewModel.currentConversationId ? Color.blue.opacity(0.1) : Color.clear)
+                                        .cornerRadius(8)
+                                    }
+                                    .buttonStyle(PlainButtonStyle())
+                                    .contextMenu {
+                                        Button(role: .destructive) {
+                                            viewModel.deleteConversation(id: conversation.id)
+                                        } label: {
+                                            Label("Delete", systemImage: "trash")
+                                        }
+                                    }
+
+                                    Divider()
+                                }
+                            }
+                            .padding(.horizontal)
+                        }
+                        Spacer()
+                    }
+                    .frame(width: 300)
+                    .background(Color(UIColor.systemBackground))
+                    .shadow(radius: 10)
+                    .transition(.move(edge: .leading))
+
+                    Spacer()
+                }
             }
             
             // Recording background
